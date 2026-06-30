@@ -4,12 +4,8 @@
 
 {% block content %}
 <div class="quiz-loc">
-  <label for="loc">地点</label>
-  <select id="loc" class="loc-select">
-    {% for loc in locations %}
-      <option value="{{ loc }}">{{ loc }}</option>
-    {% endfor %}
-  </select>
+  <label>地点</label>
+  <div id="locPicker" class="loc-picker-wrap"></div>
   <button id="next" class="btn-next">换一题</button>
 </div>
 
@@ -19,17 +15,20 @@
 {% endblock %}
 
 {% block script %}
-const locSel = document.getElementById('loc');
 const stage = document.getElementById('stage');
 const nextBtn = document.getElementById('next');
+let currentLoc = bp.getLocation();
 
-window.bp.initLocSelect(locSel, () => load());
+const picker = bp.mountLocPicker(document.getElementById('locPicker'), {{ locations|tojson }}, {
+  onSelect: (v) => { currentLoc = v; load(); }
+});
 
 async function load() {
+  currentLoc = picker.getVal();
   stage.innerHTML = '<div class="loading">加载中…</div>';
   nextBtn.disabled = true;
   try {
-    const r = await fetch(`{{ url_for('api_quiz') }}?kind=image&location=${encodeURIComponent(locSel.value)}`);
+    const r = await fetch(`{{ url_for('api_quiz') }}?kind=image&location=${encodeURIComponent(currentLoc)}`);
     const d = await r.json();
     if (d.error) { stage.innerHTML = `<div class="error">${d.error}</div>`; return; }
     render(d);
@@ -58,12 +57,12 @@ function render(d) {
       if (id === ans) {
         btn.classList.add('correct');
         document.getElementById('rmsg').innerHTML =
-          `✅ 正确！<a class="see-detail" href="/bird/${ans}">查看详情 ›</a>`;
+          `✅ 正确！<a class="see-detail" href="/bird/${ans}?from=quiz_image">查看详情 ›</a>`;
       } else {
         btn.classList.add('wrong');
         stage.querySelector(`.opt[data-id="${ans}"]`).classList.add('correct');
         document.getElementById('rmsg').innerHTML =
-          `❌ 正确答案：${d.answer_name} <a class="see-detail" href="/bird/${ans}">查看详情 ›</a>`;
+          `❌ 正确答案：${d.answer_name} <a class="see-detail" href="/bird/${ans}?from=quiz_image">查看详情 ›</a>`;
       }
     });
   });

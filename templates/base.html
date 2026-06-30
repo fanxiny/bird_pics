@@ -24,16 +24,111 @@
       setLocation(v) {
         localStorage.setItem('bp_location', v);
       },
-      initLocSelect(sel, onChange) {
-        if (!sel) return;
-        const saved = window.bp.getLocation();
-        for (const opt of sel.options) {
-          if (opt.value === saved) { sel.value = saved; break; }
+      // 挂载可搜索的分级地点选择器
+      // container: DOM 元素；locations: 地点键数组；opts: {name, value, onSelect}
+      mountLocPicker(container, locations, opts) {
+        opts = opts || {};
+        let current = opts.value || this.getLocation();
+        if (!locations.includes(current)) current = '全部';
+
+        container.classList.add('loc-picker');
+        container.innerHTML = '';
+
+        const trigger = document.createElement('button');
+        trigger.type = 'button';
+        trigger.className = 'loc-trigger';
+        container.appendChild(trigger);
+
+        let hidden = null;
+        if (opts.name) {
+          hidden = document.createElement('input');
+          hidden.type = 'hidden';
+          hidden.name = opts.name;
+          hidden.value = current;
+          container.appendChild(hidden);
         }
-        sel.addEventListener('change', () => {
-          window.bp.setLocation(sel.value);
-          if (onChange) onChange(sel.value);
+
+        const label = v => v.includes('/') ? v.split('/').join(' › ') : v;
+        const setVal = v => {
+          current = v;
+          trigger.innerHTML = '📍 <span>' + label(v) + '</span> <i class="caret">▾</i>';
+          if (hidden) hidden.value = v;
+          this.setLocation(v);
+        };
+        setVal(current);
+
+        // 弹出层
+        const modal = document.createElement('div');
+        modal.className = 'loc-modal';
+        modal.innerHTML =
+          '<div class="loc-sheet">' +
+            '<div class="loc-sheet-head"><span>选择地区</span><b class="loc-close">✕</b></div>' +
+            '<div class="loc-search-wrap">' +
+              '<input class="loc-search" placeholder="搜索地区（如：浙江 / 余杭）…" autocomplete="off">' +
+            '</div>' +
+            '<div class="loc-list"></div>' +
+          '</div>';
+        document.body.appendChild(modal);
+        const list = modal.querySelector('.loc-list');
+        const searchInput = modal.querySelector('.loc-search');
+
+        const renderOpt = (val, text) =>
+          '<div class="loc-opt' + (val === current ? ' active' : '') +
+          '" data-value="' + val + '"><span>' + text + '</span>' +
+          (val === current ? '<b class="tick">✓</b>' : '') + '</div>';
+
+        function buildList(filter) {
+          const f = (filter || '').toLowerCase().trim();
+          const matched = locations.filter(k =>
+            !f || k.toLowerCase().includes(f) ||
+            (k.split('/').pop() || '').toLowerCase().includes(f));
+          const standalone = [], groups = {};
+          for (const k of matched) {
+            if (k === '全部' || !k.includes('/')) standalone.push(k);
+            else {
+              const top = k.split('/')[0];
+              (groups[top] = groups[top] || []).push(k);
+            }
+          }
+          let html = '';
+          if (standalone.includes('全部'))
+            html += renderOpt('全部', '全部鸟类');
+          for (const k of standalone) {
+            if (k === '全部') continue;
+            html += renderOpt(k, k);
+          }
+          for (const [top, items] of Object.entries(groups)) {
+            html += '<div class="loc-group">' + top + '</div>';
+            for (const k of items) {
+              html += renderOpt(k, k.split('/').slice(1).join(' › '));
+            }
+          }
+          if (!html) html = '<div class="loc-empty">无匹配地区</div>';
+          list.innerHTML = html;
+          list.querySelectorAll('.loc-opt').forEach(el => {
+            el.addEventListener('click', () => {
+              setVal(el.dataset.value);
+              closeModal();
+              if (opts.onSelect) opts.onSelect(el.dataset.value);
+            });
+          });
+        }
+        const openModal = () => {
+          modal.classList.add('open');
+          searchInput.value = '';
+          buildList('');
+          setTimeout(() => searchInput.focus(), 60);
+        };
+        const closeModal = () => modal.classList.remove('open');
+
+        trigger.addEventListener('click', openModal);
+        modal.addEventListener('click', e => {
+          if (e.target === modal || e.target.classList.contains('loc-close'))
+            closeModal();
         });
+        searchInput.addEventListener('input', () => buildList(searchInput.value));
+
+        return { getVal: () => current, setVal };
       }
     };
   </script>

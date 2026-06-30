@@ -124,6 +124,8 @@ def _build_index(bid_str, data):
         'abbr': abbr,
         'image': image_list[0] if image_list else '',
         'sound': sound_list[0] if sound_list else '',
+        'images': image_list,
+        'sounds': sound_list,
         'image_count': len(image_list),
         'sound_count': len(sound_list),
         'provinces': provinces,
@@ -293,8 +295,10 @@ def detail(bid):
     props = data.get('properties', {}) or {}
     images = [im for im in (data.get('images') or []) if im.get('webp')]
     sounds = [sd for sd in (data.get('sounds') or []) if sd.get('mp3')]
+    # from=quiz/image 或 quiz/sound 时，详情页显示"下一题"返回按钮
+    from_quiz = request.args.get('from', '')
     return render_template('detail.html', b=b, desc=desc, props=props,
-                           images=images, sounds=sounds)
+                           images=images, sounds=sounds, from_quiz=from_quiz)
 
 
 @app.route('/quiz/image')
@@ -344,12 +348,13 @@ def api_quiz():
     chosen = random.sample(candidates, 4)
     answer = random.choice(chosen)
 
+    # 从该鸟的全部图片 / 音频中随机挑一个，避免每次都是同一张
     if kind == 'image':
-        media = url_for('media_img', bid=answer,
-                        filename=BIRDS[answer]['image'])
+        fname = random.choice(BIRDS[answer]['images'])
+        media = url_for('media_img', bid=answer, filename=fname)
     else:
-        media = url_for('media_snd', bid=answer,
-                        filename=BIRDS[answer]['sound'])
+        fname = random.choice(BIRDS[answer]['sounds'])
+        media = url_for('media_snd', bid=answer, filename=fname)
 
     options = [{'id': i, 'name': BIRDS[i]['name']} for i in chosen]
     random.shuffle(options)

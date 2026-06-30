@@ -7,8 +7,10 @@
   python birdreport.py "北京市" "北京市" ""
   python birdreport.py "广东省" "深圳市" ""
   python birdreport.py "四川省" "" ""
+  python birdreport.py "浙江省" "杭州市" "余杭区" "G3"
 
-参数：province city district（空字符串表示不指定）
+参数：province city district [version]
+  version: G3(年报3.0,默认) | CH4(第四版) | (空字符串=全部名录)
 """
 import hashlib
 import json
@@ -25,7 +27,7 @@ from Crypto.PublicKey import RSA as CryptoRSA
 from Crypto.Util.Padding import pad, unpad
 
 BASE_URL = "https://api.birdreport.cn"
-SEARCH_URL = f"{BASE_URL}/front/record/activity/search"
+TAXON_URL = f"{BASE_URL}/front/record/activity/taxon"
 
 RSA_PUB_KEY_B64 = (
     "MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCvxXa98E1uWXnBzXkS2yHUfnBM6"
@@ -126,34 +128,6 @@ def build_headers_and_body(url_encoded: str):
 
 # ---- API calls ----
 
-def search_activities(province, city, district, page=1, limit=50,
-                     start_time="", end_time=""):
-    params = {
-        "page": str(page),
-        "limit": str(limit),
-        "province": province,
-        "city": city,
-        "district": district,
-    }
-    url_encoded = urllib.parse.urlencode(params)
-    headers, body = build_headers_and_body(url_encoded)
-    resp = requests.post(SEARCH_URL, data=body, headers=headers, timeout=30)
-    resp.raise_for_status()
-    rj = resp.json()
-    if rj.get("code") != 200 and rj.get("code") != 0:
-        print(f"  API 错误: code={rj.get('code')} msg={rj.get('msg')}")
-        return []
-    encrypted_data = rj.get("data", "")
-    if not encrypted_data:
-        return []
-    decrypted = aes_decrypt(encrypted_data)
-    return json.loads(decrypted)
-
-
-def get_all_species(province, city, district):
-    return get_species_via_taxon_endpoint(province, city, district)
-
-
 def _request_with_retry(method, url, data, headers, max_retries=3):
     """带退避的请求，遇到 505/403 时等待后重试。"""
     for attempt in range(max_retries):
@@ -171,51 +145,48 @@ def _request_with_retry(method, url, data, headers, max_retries=3):
     return resp
 
 
-def get_species_via_taxon_endpoint(province, city, district):
-    """通过搜索活动列表 -> 获取每条活动的 taxon 列表来收集鸟种。"""
+def get_species_via_taxon_endpoint(province, city, district, version="G3"):
+    """通过 taxon 接口一次性获取某地区全部鸟种记录。
+
+    正确接口为 /front/record/activity/taxon，传入 province/city/district
+    参数即可在一次请求中返回该地区所有鸟种，无需逐条活动轮询。
+
+    version: 名录版本，与网站一致。
+      "G3"  = 中国观鸟年报-中国鸟类名录3.0版（网站默认，与导出 xlsx 一致）
+      "CH4" = 中国鸟类分类与分布名录(第四版)
+      ""    = 不限版本（返回两个名录的并集，数量更多）
+    """
+    params = {
+        "page": "1",
+        "limit": "1500",
+        "province": province,
+        "city": city,
+        "district": district,
+        "version": version,
+    }
+    url_encoded = urllib.parse.urlencode(params)
+    headers, body = build_headers_and_body(url_encoded)
+    print("  请求 taxon 接口...")
+    resp = _request_with_retry("POST", TAXON_URL, body, headers)
+    rj = resp.json()
+    code = rj.get("code")
+    if code not in (200, 0):
+        print(f"  API 错误: code={code} msg={rj.get('msg')}")
+        return set()
+    encrypted_data = rj.get("data", "")
+    if not encrypted_data:
+        return set()
+    taxa = json.loads(aes_decrypt(encrypted_data))
+    print(f"  接口返回 {len(taxa)} 条鸟种记录")
+
     species = set()
-    page = 1
-    taxon_url = f"{BASE_URL}/front/activity/taxon"
-
-    while True:
-        print(f"  搜索活动第 {page} 页...")
-        items = search_activities(province, city, district, page=page, limit=50)
-        if not items:
-            break
-
-        for i, item in enumerate(items):
-            report_id = item.get("reportId")
-            if not report_id:
-                continue
-
-            try:
-                taxon_params = f"page=1&limit=50&reportId={report_id}"
-                headers, body = build_headers_and_body(taxon_params)
-                resp = _request_with_retry("POST", taxon_url, body, headers)
-                rj = resp.json()
-                encrypted_data = rj.get("data", "")
-                if encrypted_data:
-                    taxa = json.loads(aes_decrypt(encrypted_data))
-                    for t in taxa:
-                        name = t.get("taxon_name", "").strip()
-                        if name:
-                            species.add(name)
-                        latin = t.get("latinname", "").strip()
-                        if latin:
-                            species.add(latin)
-            except Exception as e:
-                print(f"  获取活动 {report_id} 鸟种失败: {e}")
-
-            time.sleep(0.8)
-            if (i + 1) % 30 == 0:
-                print(f"  已处理 {i+1}/{len(items)} 条活动，当前共 {len(species)} 种鸟")
-
-        print(f"  第 {page} 页完成，累计 {len(species)} 种鸟")
-        page += 1
-        if page > 50:
-            break
-        time.sleep(3)
-
+    for t in taxa:
+        name = (t.get("taxonname") or "").strip()
+        if name:
+            species.add(name)
+        latin = (t.get("latinname") or "").strip()
+        if latin:
+            species.add(latin)
     return species
 
 
@@ -289,7 +260,23 @@ def write_to_locations(loc_name, bird_ids, location_file):
 
 # ---- 主流程 ----
 
+def _strip_suffix(name):
+    """去掉行政区划后缀，使分级路径更简洁：浙江省->浙江, 杭州市->杭州。"""
+    if not name:
+        return ''
+    for suf in ('自治区', '特别行政区', '省', '市', '区', '县'):
+        if name.endswith(suf) and len(name) > len(suf):
+            return name[:-len(suf)]
+    return name
+
 def main():
+    # Windows 控制台默认 GBK，部分鸟名生僻字（如鸂）无法输出导致崩溃
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
     if len(sys.argv) < 4:
         print(__doc__)
         sys.exit(1)
@@ -297,13 +284,18 @@ def main():
     province = sys.argv[1]
     city = sys.argv[2] if len(sys.argv) > 2 else ""
     district = sys.argv[3] if len(sys.argv) > 3 else ""
+    version = sys.argv[4] if len(sys.argv) > 4 else "G3"
 
     base_dir = os.path.dirname(os.path.abspath(__file__))
     data_dir = os.path.join(base_dir, "bird_files", "Aboutbirds", "Bird Packs")
     location_file = os.path.join(base_dir, "locations.json")
 
     region_name = district or city or province
-    print(f"=== 从 birdreport.cn 获取 [{region_name}] 的鸟种记录 ===")
+    # 分级路径：浙江/杭州/余杭，前端据此把地点按省>市>区树状展示
+    path_parts = [_strip_suffix(x) for x in (province, city, district) if x]
+    region_path = '/'.join(path_parts) if path_parts else region_name
+    ver_name = {"G3": "年报3.0", "CH4": "第四版", "": "全部名录"}.get(version, version)
+    print(f"=== 从 birdreport.cn 获取 [{region_name}] 的鸟种记录（名录: {ver_name}）===")
 
     # 1. 加载本地鸟类数据
     print("加载本地鸟类数据...")
@@ -312,7 +304,7 @@ def main():
 
     # 2. 从远程获取鸟种
     print(f"\n获取 [{region_name}] 的观鸟记录...")
-    species = get_species_via_taxon_endpoint(province, city, district)
+    species = get_species_via_taxon_endpoint(province, city, district, version=version)
     print(f"\n共获取到 {len(species)} 个鸟种名称")
 
     # 3. 匹配本地数据
@@ -322,10 +314,10 @@ def main():
     if unmatched:
         print(f"  未匹配: {len(unmatched)} 种，示例: {unmatched[:10]}")
 
-    # 4. 写入 locations.json
+    # 4. 写入 locations.json（用分级路径作为键，如 浙江/杭州/余杭）
     if matched:
-        print(f"\n将 {len(matched)} 个鸟种 ID 写入 locations.json [{region_name}]")
-        write_to_locations(region_name, list(matched.keys()), location_file)
+        print(f"\n将 {len(matched)} 个鸟种 ID 写入 locations.json [{region_path}]")
+        write_to_locations(region_path, list(matched.keys()), location_file)
         print("完成！")
     else:
         print("\n没有匹配到任何鸟种，未写入。")

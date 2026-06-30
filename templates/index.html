@@ -10,12 +10,8 @@
 </div>
 
 <div class="loc-box">
-  <label for="loc">选择地点范围</label>
-  <select id="loc" class="loc-select">
-    {% for loc in locations %}
-      <option value="{{ loc }}">{{ loc }}</option>
-    {% endfor %}
-  </select>
+  <label>选择地点范围</label>
+  <div id="locPicker" class="loc-picker-wrap"></div>
 </div>
 
 <div class="menu">
@@ -44,5 +40,5 @@
 {% endblock %}
 
 {% block script %}
-window.bp.initLocSelect(document.getElementById('loc'));
+bp.mountLocPicker(document.getElementById('locPicker'), {{ locations|tojson }});
 {% endblock %}

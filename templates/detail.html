@@ -3,6 +3,9 @@
 {% block header %}{{ b.name }}{% endblock %}
 
 {% block content %}
+{% if from_quiz %}
+<a class="btn-float-next" href="{{ url_for(from_quiz) }}">下一题 ›</a>
+{% endif %}
 <div class="detail-head">
   <h2>{{ b.name }}</h2>
   {% if b.name_en %}<p class="sub">{{ b.name_en }}</p>{% endif %}

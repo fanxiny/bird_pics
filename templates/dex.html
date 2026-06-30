@@ -3,13 +3,9 @@
 {% block header %}图鉴{% endblock %}
 
 {% block content %}
-<form class="search-bar" method="get" action="{{ url_for('dex') }}">
+<form class="search-bar" method="get" action="{{ url_for('dex') }}" id="dexForm">
   <div class="loc-row">
-    <select name="location" id="loc" class="loc-select">
-      {% for loc in locations %}
-        <option value="{{ loc }}" {% if loc == location %}selected{% endif %}>{{ loc }}</option>
-      {% endfor %}
-    </select>
+    <div id="locPicker"></div>
   </div>
   <div class="search-row">
     <input type="text" name="q" value="{{ q }}" placeholder="输入中文名 / 拼音 / 英文 / 学名" autocomplete="off" autofocus>
@@ -50,7 +46,10 @@
 {% endblock %}
 
 {% block script %}
-// 地点切换时保存到 localStorage
-const locSel = document.getElementById('loc');
-locSel.addEventListener('change', () => window.bp.setLocation(locSel.value));
+// 地点切换后带条件重新搜索（保留当前关键词）
+bp.mountLocPicker(document.getElementById('locPicker'), {{ locations|tojson }}, {
+  name: 'location',
+  value: {{ location|tojson }},
+  onSelect: () => document.getElementById('dexForm').submit()
+});
 {% endblock %}
