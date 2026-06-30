@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#2e7d32">
+  <title>{% block title %}懂鸟图鉴{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <a class="back" href="{{ url_for('index') }}">‹</a>
+    <h1>{% block header %}{% endblock %}</h1>
+    <span class="spacer"></span>
+  </header>
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+  <script>
+    window.bp = {
+      getLocation() {
+        return localStorage.getItem('bp_location') || '全部';
+      },
+      setLocation(v) {
+        localStorage.setItem('bp_location', v);
+      },
+      initLocSelect(sel, onChange) {
+        if (!sel) return;
+        const saved = window.bp.getLocation();
+        for (const opt of sel.options) {
+          if (opt.value === saved) { sel.value = saved; break; }
+        }
+        sel.addEventListener('change', () => {
+          window.bp.setLocation(sel.value);
+          if (onChange) onChange(sel.value);
+        });
+      }
+    };
+  </script>
+  {% block script %}{% endblock %}
+</body>
+</html>

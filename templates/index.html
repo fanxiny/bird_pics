@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% block title %}懂鸟图鉴{% endblock %}
+{% block header %}懂鸟图鉴{% endblock %}
+
+{% block content %}
+<div class="hero">
+  <div class="hero-emoji">🐦</div>
+  <div class="hero-title">懂鸟图鉴</div>
+  <div class="hero-sub">共收录 {{ total }} 种鸟类</div>
+</div>
+
+<div class="loc-box">
+  <label for="loc">选择地点范围</label>
+  <select id="loc" class="loc-select">
+    {% for loc in locations %}
+      <option value="{{ loc }}">{{ loc }}</option>
+    {% endfor %}
+  </select>
+</div>
+
+<div class="menu">
+  <a class="menu-card c-dex" href="{{ url_for('dex') }}">
+    <span class="menu-emoji">📖</span>
+    <div class="menu-text">
+      <span class="menu-name">图鉴</span>
+      <span class="menu-desc">搜索鸟类，查看图片 / 声音 / 说明</span>
+    </div>
+  </a>
+  <a class="menu-card c-img" href="{{ url_for('quiz_image') }}">
+    <span class="menu-emoji">📷</span>
+    <div class="menu-text">
+      <span class="menu-name">图片测试</span>
+      <span class="menu-desc">看图识鸟，四选一</span>
+    </div>
+  </a>
+  <a class="menu-card c-snd" href="{{ url_for('quiz_sound') }}">
+    <span class="menu-emoji">🎵</span>
+    <div class="menu-text">
+      <span class="menu-name">声音测试</span>
+      <span class="menu-desc">听声辨鸟，四选一</span>
+    </div>
+  </a>
+</div>
+{% endblock %}
+
+{% block script %}
+window.bp.initLocSelect(document.getElementById('loc'));
+{% endblock %}

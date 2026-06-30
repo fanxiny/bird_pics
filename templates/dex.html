@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+{% block title %}图鉴{% endblock %}
+{% block header %}图鉴{% endblock %}
+
+{% block content %}
+<form class="search-bar" method="get" action="{{ url_for('dex') }}">
+  <div class="loc-row">
+    <select name="location" id="loc" class="loc-select">
+      {% for loc in locations %}
+        <option value="{{ loc }}" {% if loc == location %}selected{% endif %}>{{ loc }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="search-row">
+    <input type="text" name="q" value="{{ q }}" placeholder="输入中文名 / 拼音 / 英文 / 学名" autocomplete="off" autofocus>
+    <button type="submit">搜索</button>
+  </div>
+</form>
+
+{% if q %}
+  <p class="result-info">在「{{ location }}」中搜索 “{{ q }}”，共 {{ total }} 条结果</p>
+  {% if results %}
+  <ul class="bird-list">
+    {% for b in results %}
+    <li>
+      <a href="{{ url_for('detail', bid=b.id) }}">
+        {% if b.image %}
+        <img loading="lazy" src="{{ url_for('media_img', bid=b.id, filename=b.image) }}" alt="">
+        {% else %}
+        <div class="no-img">无图</div>
+        {% endif %}
+        <div class="info">
+          <div class="name">{{ b.name }}</div>
+          <div class="sub">{{ b.name_en }}{% if b.sci %} · <i>{{ b.sci }}</i>{% endif %}</div>
+        </div>
+        <span class="arrow">›</span>
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <div class="empty">没有匹配的鸟类，换个关键词试试</div>
+  {% endif %}
+{% else %}
+  <div class="hint">
+    <p>输入关键词开始搜索</p>
+    <p class="examples">示例：麻雀 · hmq · 白头鸭 · duck · Emberiza</p>
+  </div>
+{% endif %}
+{% endblock %}
+
+{% block script %}
+// 地点切换时保存到 localStorage
+const locSel = document.getElementById('loc');
+locSel.addEventListener('change', () => window.bp.setLocation(locSel.value));
+{% endblock %}

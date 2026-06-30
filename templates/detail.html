@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+{% block title %}{{ b.name }}{% endblock %}
+{% block header %}{{ b.name }}{% endblock %}
+
+{% block content %}
+<div class="detail-head">
+  <h2>{{ b.name }}</h2>
+  {% if b.name_en %}<p class="sub">{{ b.name_en }}</p>{% endif %}
+  {% if b.sci %}<p class="sci"><i>{{ b.sci }}</i></p>{% endif %}
+  {% if props %}
+  <div class="tags">
+    {% if props.中文目名 %}<span>{{ props.中文目名 }}</span>{% endif %}
+    {% if props.中文科名 %}<span>{{ props.中文科名 }}</span>{% endif %}
+    {% if props.IUCN %}<span>IUCN: {{ props.IUCN }}</span>{% endif %}
+    {% if props.迁徙模式 %}<span>{{ props.迁徙模式 }}</span>{% endif %}
+  </div>
+  {% endif %}
+</div>
+
+{% if images %}
+<div class="gallery">
+  {% for im in images %}
+  <figure>
+    <img loading="lazy" src="{{ url_for('media_img', bid=b.id, filename=im.webp) }}" alt="">
+    {% if im.desc or im.au %}
+    <figcaption>
+      {% if im.desc %}{{ im.desc }}{% endif %}
+      {% if im.au %}<span class="au">摄影：{{ im.au }}</span>{% endif %}
+    </figcaption>
+    {% endif %}
+  </figure>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if sounds %}
+<div class="section">
+  <h3>🔊 声音 ({{ sounds|length }})</h3>
+  {% for sd in sounds %}
+  <div class="sound-item">
+    <audio controls preload="none" src="{{ url_for('media_snd', bid=b.id, filename=sd.mp3) }}"></audio>
+    <span class="sound-meta">{{ sd.type or '声音' }}{% if sd.au %} · {{ sd.au }}{% endif %}</span>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="section desc">
+  {% set sections = ['综述','外形特征','鸣叫特征','生活习性','生长繁殖','地理分布','区别辨识','保护现状','其他'] %}
+  {% set ns = namespace(opened=false) %}
+  {% for key in sections %}
+    {% if desc.get(key) %}
+    <details {% if not ns.opened %}open{% set ns.opened = true %}{% endif %}>
+      <summary>{{ key }}</summary>
+      <div class="desc-body">{{ desc[key] | birddesc }}</div>
+    </details>
+    {% endif %}
+  {% endfor %}
+</div>
+{% endblock %}

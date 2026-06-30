@@ -1,0 +1,82 @@
+{% extends 'base.html' %}
+{% block title %}声音测试{% endblock %}
+{% block header %}声音测试{% endblock %}
+
+{% block content %}
+<div class="quiz-loc">
+  <label for="loc">地点</label>
+  <select id="loc" class="loc-select">
+    {% for loc in locations %}
+      <option value="{{ loc }}">{{ loc }}</option>
+    {% endfor %}
+  </select>
+  <button id="next" class="btn-next">换一题</button>
+</div>
+
+<div id="stage" class="quiz-stage">
+  <div class="loading">加载中…</div>
+</div>
+{% endblock %}
+
+{% block script %}
+const locSel = document.getElementById('loc');
+const stage = document.getElementById('stage');
+const nextBtn = document.getElementById('next');
+
+window.bp.initLocSelect(locSel, () => load());
+
+async function load() {
+  stage.innerHTML = '<div class="loading">加载中…</div>';
+  nextBtn.disabled = true;
+  try {
+    const r = await fetch(`{{ url_for('api_quiz') }}?kind=sound&location=${encodeURIComponent(locSel.value)}`);
+    const d = await r.json();
+    if (d.error) { stage.innerHTML = `<div class="error">${d.error}</div>`; return; }
+    render(d);
+  } catch(e) {
+    stage.innerHTML = '<div class="error">网络错误，请重试</div>';
+  } finally {
+    nextBtn.disabled = false;
+  }
+}
+
+function render(d) {
+  let html = `<div class="sound-box">
+    <div class="sound-icon">🎵</div>
+    <audio id="player" controls preload="none" src="${d.media}"></audio>
+    <button class="btn-play" id="playBtn">▶ 点击播放</button>
+  </div>`;
+  html += '<div class="options">';
+  d.options.forEach((o) => {
+    html += `<button class="opt" data-id="${o.id}" data-ans="${d.answer_id}">${o.name}</button>`;
+  });
+  html += '</div>';
+  html += '<div class="result-msg" id="rmsg"></div>';
+  stage.innerHTML = html;
+
+  document.getElementById('playBtn').addEventListener('click', () => {
+    document.getElementById('player').play();
+  });
+
+  stage.querySelectorAll('.opt').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (stage.querySelector('.opt.correct')) return;
+      const id = +btn.dataset.id;
+      const ans = +btn.dataset.ans;
+      if (id === ans) {
+        btn.classList.add('correct');
+        document.getElementById('rmsg').innerHTML =
+          `✅ 正确！<a class="see-detail" href="/bird/${ans}">查看详情 ›</a>`;
+      } else {
+        btn.classList.add('wrong');
+        stage.querySelector(`.opt[data-id="${ans}"]`).classList.add('correct');
+        document.getElementById('rmsg').innerHTML =
+          `❌ 正确答案：${d.answer_name} <a class="see-detail" href="/bird/${ans}">查看详情 ›</a>`;
+      }
+    });
+  });
+}
+
+nextBtn.addEventListener('click', load);
+load();
+{% endblock %}
