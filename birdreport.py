@@ -90,7 +90,7 @@ def format_data(url_encoded: str) -> str:
     """format: parse -> sort keys -> JSON.stringify."""
     d = data_to_json(url_encoded)
     sorted_d = sort_ascii(d)
-    return json.dumps(sorted_d, separators=(",", ":"))
+    return json.dumps(sorted_d, separators=(",", ":"), ensure_ascii=False)
 
 
 def md5_sign(text: str) -> str:
@@ -108,11 +108,14 @@ def build_headers_and_body(url_encoded: str):
     request_id = get_uuid()
     sign = md5_sign(fmt + request_id + str(timestamp))
     headers = {
-        "Accept": "*/*",
+        "Accept": "application/json, text/javascript, */*; q=0.01",
         "Accept-Language": "zh-CN,zh;q=0.9",
         "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-        "Origin": "http://www.birdreport.cn",
-        "Referer": "http://www.birdreport.cn/",
+        "Origin": "https://www.birdreport.cn",
+        "Referer": "https://www.birdreport.cn/",
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-site",
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36",
         "requestId": request_id,
         "timestamp": str(timestamp),
@@ -151,6 +154,23 @@ def get_all_species(province, city, district):
     return get_species_via_taxon_endpoint(province, city, district)
 
 
+def _request_with_retry(method, url, data, headers, max_retries=3):
+    """带退避的请求，遇到 505/403 时等待后重试。"""
+    for attempt in range(max_retries):
+        resp = requests.request(method, url, data=data, headers=headers, timeout=15)
+        rj = resp.json()
+        code = rj.get("code")
+        if code in (200, 0):
+            return resp
+        if code == 505 or resp.status_code == 403:
+            wait = 60 * (attempt + 1)
+            print(f"  被限流(505)，等待 {wait} 秒后重试 ({attempt+1}/{max_retries})...")
+            time.sleep(wait)
+            continue
+        return resp
+    return resp
+
+
 def get_species_via_taxon_endpoint(province, city, district):
     """通过搜索活动列表 -> 获取每条活动的 taxon 列表来收集鸟种。"""
     species = set()
@@ -163,7 +183,7 @@ def get_species_via_taxon_endpoint(province, city, district):
         if not items:
             break
 
-        for item in items:
+        for i, item in enumerate(items):
             report_id = item.get("reportId")
             if not report_id:
                 continue
@@ -171,8 +191,7 @@ def get_species_via_taxon_endpoint(province, city, district):
             try:
                 taxon_params = f"page=1&limit=50&reportId={report_id}"
                 headers, body = build_headers_and_body(taxon_params)
-                resp = requests.post(taxon_url, data=body, headers=headers, timeout=15)
-                resp.raise_for_status()
+                resp = _request_with_retry("POST", taxon_url, body, headers)
                 rj = resp.json()
                 encrypted_data = rj.get("data", "")
                 if encrypted_data:
@@ -187,11 +206,15 @@ def get_species_via_taxon_endpoint(province, city, district):
             except Exception as e:
                 print(f"  获取活动 {report_id} 鸟种失败: {e}")
 
-            time.sleep(0.15)
+            time.sleep(0.8)
+            if (i + 1) % 30 == 0:
+                print(f"  已处理 {i+1}/{len(items)} 条活动，当前共 {len(species)} 种鸟")
 
+        print(f"  第 {page} 页完成，累计 {len(species)} 种鸟")
         page += 1
         if page > 50:
             break
+        time.sleep(3)
 
     return species
 
