@@ -7,10 +7,17 @@
   python birdreport.py "北京市" "北京市" ""
   python birdreport.py "广东省" "深圳市" ""
   python birdreport.py "四川省" "" ""
-  python birdreport.py "浙江省" "杭州市" "余杭区" "G3"
+  python birdreport.py "浙江省" "杭州市" "余杭区" "CH4"
 
 参数：province city district [version]
-  version: G3(年报3.0,默认) | CH4(第四版) | (空字符串=全部名录)
+  version: CH4(第四版,默认,与网站首页一致) | G3(年报3.0) | (空字符串=全部名录)
+
+支持的 taxon 接口查询参数（按需要可扩展函数签名）：
+  province/city/district  行政区划
+  pointname               观鸟点，如"北湖草荡"
+  startTime/endTime       日期范围，格式 YYYY-MM-DD（按月份/年份筛选）
+  version                 名录版本
+  outside_type            通常为 0
 """
 import hashlib
 import json
@@ -145,16 +152,20 @@ def _request_with_retry(method, url, data, headers, max_retries=3):
     return resp
 
 
-def get_species_via_taxon_endpoint(province, city, district, version="G3"):
+def get_species_via_taxon_endpoint(province, city, district, version="CH4",
+                                   pointname="", start_time="", end_time=""):
     """通过 taxon 接口一次性获取某地区全部鸟种记录。
 
     正确接口为 /front/record/activity/taxon，传入 province/city/district
     参数即可在一次请求中返回该地区所有鸟种，无需逐条活动轮询。
 
-    version: 名录版本，与网站一致。
-      "G3"  = 中国观鸟年报-中国鸟类名录3.0版（网站默认，与导出 xlsx 一致）
-      "CH4" = 中国鸟类分类与分布名录(第四版)
+    version: 名录版本，与网站首页一致。
+      "CH4" = 中国鸟类分类与分布名录(第四版)（网站默认）
+      "G3"  = 中国观鸟年报-中国鸟类名录3.0版（与导出 xlsx 一致）
       ""    = 不限版本（返回两个名录的并集，数量更多）
+    pointname: 观鸟点名称（如"北湖草荡"），可选，按具体观鸟点筛选。
+    start_time / end_time: 日期范围 "YYYY-MM-DD"（如 2026-06-01 / 2026-06-30），
+      可只传一个，也可都传实现按月份/年份筛选。
     """
     params = {
         "page": "1",
@@ -164,6 +175,12 @@ def get_species_via_taxon_endpoint(province, city, district, version="G3"):
         "district": district,
         "version": version,
     }
+    if pointname:
+        params["pointname"] = pointname
+    if start_time:
+        params["startTime"] = start_time
+    if end_time:
+        params["endTime"] = end_time
     url_encoded = urllib.parse.urlencode(params)
     headers, body = build_headers_and_body(url_encoded)
     print("  请求 taxon 接口...")
@@ -284,7 +301,7 @@ def main():
     province = sys.argv[1]
     city = sys.argv[2] if len(sys.argv) > 2 else ""
     district = sys.argv[3] if len(sys.argv) > 3 else ""
-    version = sys.argv[4] if len(sys.argv) > 4 else "G3"
+    version = sys.argv[4] if len(sys.argv) > 4 else "CH4"
 
     base_dir = os.path.dirname(os.path.abspath(__file__))
     data_dir = os.path.join(base_dir, "bird_files", "Aboutbirds", "Bird Packs")
@@ -294,7 +311,7 @@ def main():
     # 分级路径：浙江/杭州/余杭，前端据此把地点按省>市>区树状展示
     path_parts = [_strip_suffix(x) for x in (province, city, district) if x]
     region_path = '/'.join(path_parts) if path_parts else region_name
-    ver_name = {"G3": "年报3.0", "CH4": "第四版", "": "全部名录"}.get(version, version)
+    ver_name = {"CH4": "第四版", "G3": "年报3.0", "": "全部名录"}.get(version, version)
     print(f"=== 从 birdreport.cn 获取 [{region_name}] 的鸟种记录（名录: {ver_name}）===")
 
     # 1. 加载本地鸟类数据
