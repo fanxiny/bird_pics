@@ -6,16 +6,21 @@
 <form class="search-bar" method="get" action="{{ url_for('dex') }}" id="dexForm">
   <div class="loc-row">
     <div id="locPicker"></div>
+    <div id="monthPicker"></div>
   </div>
+  <input type="hidden" name="location" id="locField">
   <div class="search-row">
     <input type="text" name="q" value="{{ q }}" placeholder="输入中文名 / 拼音 / 英文 / 学名" autocomplete="off" autofocus>
     <button type="submit">搜索</button>
   </div>
 </form>
 
-{% if q %}
-  <p class="result-info">在「{{ location }}」中搜索 “{{ q }}”，共 {{ total }} 条结果</p>
-  {% if results %}
+{% if results %}
+  <p class="result-info">
+    {% if q %}在「{{ loc_label }}」中搜索 “{{ q }}”，共 {{ total }} 条结果
+    {% else %}「{{ loc_label }}」共 {{ total }} 种鸟类
+    {% endif %}
+  </p>
   <ul class="bird-list">
     {% for b in results %}
     <li>
@@ -34,22 +39,36 @@
     </li>
     {% endfor %}
   </ul>
-  {% else %}
-  <div class="empty">没有匹配的鸟类，换个关键词试试</div>
-  {% endif %}
 {% else %}
+  {% if q %}
+  <div class="empty">没有匹配的鸟类，换个关键词试试</div>
+  {% else %}
   <div class="hint">
-    <p>输入关键词开始搜索</p>
-    <p class="examples">示例：麻雀 · hmq · 白头鸭 · duck · Emberiza</p>
+    <p>该地点暂无鸟类数据</p>
   </div>
+  {% endif %}
 {% endif %}
 {% endblock %}
 
 {% block script %}
-// 地点切换后带条件重新搜索（保留当前关键词）
-bp.mountLocPicker(document.getElementById('locPicker'), {{ locations|tojson }}, {
-  name: 'location',
-  value: {{ location|tojson }},
-  onSelect: () => document.getElementById('dexForm').submit()
+bp.ALL_LOCATIONS = {{ locations|tojson }};
+// 从 URL 的 location（可能含月份后缀）拆分出基础地点 + 月份
+const parsed = bp.parseFullLocation({{ location|tojson }}, bp.ALL_LOCATIONS);
+bp.setLocation(parsed.base);
+bp.setMonth(parsed.month);
+
+const locField = document.getElementById('locField');
+const apply = () => {
+  locField.value = bp.fullLocation();
+  document.getElementById('dexForm').submit();
+};
+
+const monthPicker = bp.mountMonthPicker(document.getElementById('monthPicker'), bp.ALL_LOCATIONS, {
+  onSelect: () => apply()
 });
+bp.mountLocPicker(document.getElementById('locPicker'), bp.ALL_LOCATIONS, {
+  value: parsed.base,
+  onSelect: () => { monthPicker.update(); apply(); }
+});
+locField.value = bp.fullLocation();
 {% endblock %}

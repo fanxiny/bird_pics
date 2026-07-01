@@ -79,9 +79,14 @@
 
         function buildList(filter) {
           const f = (filter || '').toLowerCase().trim();
-          const matched = locations.filter(k =>
-            !f || k.toLowerCase().includes(f) ||
-            (k.split('/').pop() || '').toLowerCase().includes(f));
+          const matched = locations.filter(k => {
+            // 排除月份后缀 key（如 base_6），列表只显示基础地点
+            const mm = k.match(/^(.*)_(\d+)$/);
+            if (mm && locations.indexOf(mm[1]) !== -1) return false;
+            if (!f) return true;
+            return k.toLowerCase().includes(f) ||
+              (k.split('/').pop() || '').toLowerCase().includes(f);
+          });
           const standalone = [], groups = {};
           for (const k of matched) {
             if (k === '全部' || !k.includes('/')) standalone.push(k);
@@ -129,6 +134,73 @@
         searchInput.addEventListener('input', () => buildList(searchInput.value));
 
         return { getVal: () => current, setVal };
+      },
+      // ---- 月份筛选 ----
+      // 各页面初始化时设置：bp.ALL_LOCATIONS = [...]
+      getMonth() {
+        return localStorage.getItem('bp_month') || '0';
+      },
+      setMonth(m) {
+        localStorage.setItem('bp_month', m);
+      },
+      // 某基础地点下有数据月份的列表（检查 base_1 ~ base_12 是否存在）
+      availableMonths(locations, base) {
+        const ms = [];
+        for (let i = 1; i <= 12; i++) {
+          if (locations.indexOf(base + '_' + i) !== -1) ms.push(i);
+        }
+        return ms;
+      },
+      // 实际传给后端的 location（含月份后缀，如 base_6）
+      fullLocation() {
+        const base = this.getLocation();
+        const m = this.getMonth();
+        if (m && m !== '0') {
+          if (this.availableMonths(this.ALL_LOCATIONS || [], base).indexOf(+m) !== -1) {
+            return base + '_' + m;
+          }
+        }
+        return base;
+      },
+      // 从 URL 带回的 location（可能是 base 或 base_month）拆分出 {base, month}
+      parseFullLocation(loc, locations) {
+        const mm = loc.match(/^(.*)_(\d+)$/);
+        if (mm && locations.indexOf(loc) !== -1 && locations.indexOf(mm[1]) !== -1) {
+          return { base: mm[1], month: mm[2] };
+        }
+        return { base: loc, month: '0' };
+      },
+      // 挂载月份下拉；opts: { getBase, onSelect }
+      // getBase: 返回当前基础地点的函数（默认 bp.getLocation）
+      // onSelect: 月份变化回调
+      // 返回 { update(), getVal() }
+      mountMonthPicker(container, locations, opts) {
+        opts = opts || {};
+        container.classList.add('month-picker-wrap');
+        container.innerHTML = '';
+        const sel = document.createElement('select');
+        sel.className = 'month-select';
+        container.appendChild(sel);
+        const getBase = opts.getBase || (() => this.getLocation());
+        const rebuild = () => {
+          const base = getBase();
+          const months = this.availableMonths(locations, base);
+          let html = '<option value="0">全年</option>';
+          for (const m of months) html += '<option value="' + m + '">' + m + '月</option>';
+          sel.innerHTML = html;
+          let cur = this.getMonth();
+          if (cur !== '0' && months.indexOf(+cur) === -1) {
+            cur = '0';
+            this.setMonth(cur);
+          }
+          sel.value = cur;
+        };
+        rebuild();
+        sel.addEventListener('change', () => {
+          this.setMonth(sel.value);
+          if (opts.onSelect) opts.onSelect(sel.value);
+        });
+        return { update: rebuild, getVal: () => sel.value };
       }
     };
   </script>

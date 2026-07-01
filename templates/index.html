@@ -12,6 +12,7 @@
 <div class="loc-box">
   <label>选择地点范围</label>
   <div id="locPicker" class="loc-picker-wrap"></div>
+  <div id="monthPicker" class="month-picker-wrap"></div>
 </div>
 
 <div class="menu">
@@ -40,5 +41,16 @@
 {% endblock %}
 
 {% block script %}
-bp.mountLocPicker(document.getElementById('locPicker'), {{ locations|tojson }});
+bp.ALL_LOCATIONS = {{ locations|tojson }};
+const monthPicker = bp.mountMonthPicker(document.getElementById('monthPicker'), bp.ALL_LOCATIONS);
+bp.mountLocPicker(document.getElementById('locPicker'), bp.ALL_LOCATIONS, {
+  onSelect: () => monthPicker.update()
+});
+
+// 图鉴链接携带当前地点 + 月份
+document.querySelector('.c-dex').addEventListener('click', (e) => {
+  e.preventDefault();
+  const loc = bp.fullLocation();
+  window.location.href = '{{ url_for("dex") }}?location=' + encodeURIComponent(loc);
+});
 {% endblock %}

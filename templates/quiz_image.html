@@ -6,6 +6,7 @@
 <div class="quiz-loc">
   <label>地点</label>
   <div id="locPicker" class="loc-picker-wrap"></div>
+  <div id="monthPicker" class="month-picker-wrap"></div>
   <button id="next" class="btn-next">换一题</button>
 </div>
 
@@ -17,18 +18,21 @@
 {% block script %}
 const stage = document.getElementById('stage');
 const nextBtn = document.getElementById('next');
-let currentLoc = bp.getLocation();
 
-const picker = bp.mountLocPicker(document.getElementById('locPicker'), {{ locations|tojson }}, {
-  onSelect: (v) => { currentLoc = v; load(); }
+bp.ALL_LOCATIONS = {{ locations|tojson }};
+const monthPicker = bp.mountMonthPicker(document.getElementById('monthPicker'), bp.ALL_LOCATIONS, {
+  onSelect: () => load()
+});
+const picker = bp.mountLocPicker(document.getElementById('locPicker'), bp.ALL_LOCATIONS, {
+  onSelect: () => { monthPicker.update(); load(); }
 });
 
 async function load() {
-  currentLoc = picker.getVal();
+  const loc = bp.fullLocation();
   stage.innerHTML = '<div class="loading">加载中…</div>';
   nextBtn.disabled = true;
   try {
-    const r = await fetch(`{{ url_for('api_quiz') }}?kind=image&location=${encodeURIComponent(currentLoc)}`);
+    const r = await fetch(`{{ url_for('api_quiz') }}?kind=image&location=${encodeURIComponent(loc)}`);
     const d = await r.json();
     if (d.error) { stage.innerHTML = `<div class="error">${d.error}</div>`; return; }
     render(d);

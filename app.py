@@ -28,6 +28,7 @@ LOCATION_FILE = os.path.join(BASE_DIR, 'locations.json')
 app = Flask(__name__)
 app.config['JSON_AS_ASCII'] = False
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 300
+app.config['TEMPLATES_AUTO_RELOAD'] = True
 
 
 @app.template_filter('birddesc')
@@ -260,11 +261,11 @@ def index():
 def dex():
     q = (request.args.get('q') or '').strip()
     location = request.args.get('location') or '全部'
+    pool = birds_for_location(location)
     results = []
 
     if q:
         ql = q.lower()
-        pool = birds_for_location(location)
         for bid in pool:
             b = BIRDS[bid]
             if (q in b['name'] or
@@ -274,10 +275,20 @@ def dex():
                     ql in b['sci'].lower() or
                     q == str(b['id'])):
                 results.append(b)
-        results.sort(key=lambda x: x['name'])
+    else:
+        # 无搜索词：展示该地点（+月份）下的全部鸟类
+        results = [BIRDS[bid] for bid in pool]
+    results.sort(key=lambda x: x['name'])
+
+    # 友好显示地点（含月份后缀时加“X月”）
+    m = re.match(r'^(.*)_(\d+)$', location)
+    if m and m.group(1) in LOCATIONS:
+        loc_label = f"{m.group(1).replace('/', ' › ')}（{m.group(2)}月）"
+    else:
+        loc_label = location.replace('/', ' › ')
 
     return render_template('dex.html',
-                           q=q, location=location,
+                           q=q, location=location, loc_label=loc_label,
                            locations=location_choices(),
                            results=results,
                            total=len(results))
